@@ -19,6 +19,12 @@ jobs:
       contents: read
       packages: write
 
+    outputs:
+      producer: ${{ steps.images.outputs.producer }}
+      fraud: ${{ steps.images.outputs.fraud }}
+      payment: ${{ steps.images.outputs.payment }}
+      analytics: ${{ steps.images.outputs.analytics }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -125,3 +131,4 @@ jobs:
           TF_VAR_confluent_api_secret: ${{ secrets.CONFLUENT_API_SECRET }}
           TF_VAR_rds_password: ${{ secrets.RDS_PASSWORD }}
         run: terraform apply -auto-approve tfplan
+
