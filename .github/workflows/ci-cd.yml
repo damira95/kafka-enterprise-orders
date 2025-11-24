@@ -1,143 +1,47 @@
-name: CI-CD
+name: Terraform CI/CD
 
-# Run automatically for every push & PR (your option 1)
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-
-env:
-  AWS_REGION: us-east-2
-  TF_WORKING_DIR: infra/terraform
-  GHCR_REGISTRY: ghcr.io
-  PROJECT_NAME: kafka-enterprise-orders
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/ci-cd.yml"
+  workflow_dispatch:
 
 jobs:
-
-  build-and-push:
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
-
-    # FIX: expose Docker image tags as job outputs
-    outputs:
-      producer: ${{ steps.images.outputs.producer }}
-      fraud: ${{ steps.images.outputs.fraud }}
-      payment: ${{ steps.images.outputs.payment }}
-      analytics: ${{ steps.images.outputs.analytics }}
-
-    steps:
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # ---- Build & Push Images ----
-      - name: Build & push order-producer
-        uses: docker/build-push-action@v6
-        with:
-          context: ./producer
-          push: true
-          tags: |
-            ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/order-producer:latest
-
-      - name: Build & push fraud-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./consumers/fraud-service
-          push: true
-          tags: |
-            ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/fraud-service:latest
-
-      - name: Build & push payment-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./consumers/payment-service
-          push: true
-          tags: |
-            ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/payment-service:latest
-
-      - name: Build & push analytics-service
-        uses: docker/build-push-action@v6
-        with:
-          context: ./consumers/analytics-service
-          push: true
-          tags: |
-            ${{ env.GHCR_REGISTRY }}/${{ github.repository }}/analytics-service:latest
-
-      # ---- Export docker image tags for Terraform ----
-      - name: Export image tags
-        id: images
-        run: |
-          echo "producer=${{ env.GHCR_REGISTRY }}/${{ github.repository }}/order-producer:latest" >> $GITHUB_OUTPUT
-          echo "fraud=${{ env.GHCR_REGISTRY }}/${{ github.repository }}/fraud-service:latest" >> $GITHUB_OUTPUT
-          echo "payment=${{ env.GHCR_REGISTRY }}/${{ github.repository }}/payment-service:latest" >> $GITHUB_OUTPUT
-          echo "analytics=${{ env.GHCR_REGISTRY }}/${{ github.repository }}/analytics-service:latest" >> $GITHUB_OUTPUT
-
   terraform:
-    needs: build-and-push
     runs-on: ubuntu-latest
 
-    permissions:
-      id-token: write
-      contents: read
+    env:
+      AWS_REGION: us-east-2
+      TF_WORKING_DIR: infra/terraform
+      PROJECT_NAME: kafka-enterprise-orders
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials using OIDC
+      # 🔐 AWS'ке GitHub Secrets аркылуу логин болуу (Access Keys)
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.5
+          terraform_wrapper: false
 
-      # ---- Terraform Init ----
       - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init
+        run: terraform -chdir=${TF_WORKING_DIR} init
 
-      # ---- Terraform Plan ----
       - name: Terraform Plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        env:
-          TF_VAR_aws_region: ${{ env.AWS_REGION }}
-          TF_VAR_container_image_producer: ${{ needs.build-and-push.outputs.producer }}
-          TF_VAR_container_image_fraud: ${{ needs.build-and-push.outputs.fraud }}
-          TF_VAR_container_image_payment: ${{ needs.build-and-push.outputs.payment }}
-          TF_VAR_container_image_analytics: ${{ needs.build-and-push.outputs.analytics }}
-          TF_VAR_confluent_bootstrap_servers: ${{ secrets.CONFLUENT_BOOTSTRAP_SERVERS }}
-          TF_VAR_confluent_api_key: ${{ secrets.CONFLUENT_API_KEY }}
-          TF_VAR_confluent_api_secret: ${{ secrets.CONFLUENT_API_SECRET }}
-          TF_VAR_rds_password: ${{ secrets.RDS_PASSWORD }}
-        run: terraform plan -out=tfplan
+        run: terraform -chdir=${TF_WORKING_DIR} plan
 
-      # ---- Terraform Apply ----
+      # Кааласаң, Apply'ды убактылуу коммент коюп турсаң болот
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        env:
-          TF_VAR_aws_region: ${{ env.AWS_REGION }}
-          TF_VAR_container_image_producer: ${{ needs.build-and-push.outputs.producer }}
-          TF_VAR_container_image_fraud: ${{ needs.build-and-push.outputs.fraud }}
-          TF_VAR_container_image_payment: ${{ needs.build-and-push.outputs.payment }}
-          TF_VAR_container_image_analytics: ${{ needs.build-and-push.outputs.analytics }}
-          TF_VAR_confluent_bootstrap_servers: ${{ secrets.CONFLUENT_BOOTSTRAP_SERVERS }}
-          TF_VAR_confluent_api_key: ${{ secrets.CONFLUENT_API_KEY }}
-          TF_VAR_confluent_api_secret: ${{ secrets.CONFLUENT_API_SECRET }}
-          TF_VAR_rds_password: ${{ secrets.RDS_PASSWORD }}
-        run: terraform apply -auto-approve tfplan
+        run: terraform -chdir=${TF_WORKING_DIR} apply -auto-approve
+
