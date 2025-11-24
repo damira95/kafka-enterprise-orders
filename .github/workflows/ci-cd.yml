@@ -3,7 +3,6 @@ name: Terraform CI/CD
 on:
   push:
     branches: [ "main" ]
-    # Азырынча workflow өзү өзгөргөндө эле иштеп турсун
     paths:
       - ".github/workflows/ci-cd.yml"
   workflow_dispatch:
@@ -20,7 +19,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 🔐 AWS'ке GitHub Secrets аркылуу логин болуу (Access Keys)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -33,12 +31,12 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - name: Terraform Init
-        run: terraform init
+      # - name: Terraform Init
+      #   run: terraform init
 
-      - name: Terraform Plan
-        run: terraform plan
+      # - name: Terraform Plan
+      #   run: terraform plan
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve
+      # - name: Terraform Apply
+      #   if: github.ref == 'refs/heads/main'
+      #   run: terraform apply -auto-approve
