@@ -1,0 +1,24 @@
+frontendImage: "ghcr.io/aisalkyn85/kafka-enterprise-orders/web-frontend:latest"
+backendImage: "ghcr.io/aisalkyn85/kafka-enterprise-orders/web-backend:latest"
+
+replicaCount: 2
+
+domain: "orders.jumptotech.dev"
+
+couchbase:
+  host: "couchbase.your-domain"
+  bucket: "order_analytics"
+  username: "Administrator"
+  password: "password"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/target-type: ip
